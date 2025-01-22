@@ -542,6 +542,70 @@ TWO
 
             self.assertTrue(repo.is_dirty(path=str(fname1)))
 
+    def test_multiple_edits_to_the_same_file(self):
+        """
+        When the AI does multiple edits to the same file, then it should either succeed
+        or fail with an error to the LLM, and not try to edit the wrong file.
+        """
+
+        with GitTemporaryDirectory():
+            repo = git.Repo()
+
+            fname = Path("file.cr")
+
+            fname.write_text("""
+one = "one"
+two = "two"
+three = "three"
+""")
+
+            repo.git.add(str(fname))
+            repo.git.commit("-m", "new")
+
+            io = InputOutput(yes=True)
+            coder = Coder.create(self.GPT35, "diff", io=io, fnames=[str(fname)])
+
+            def mock_send(*args, **kwargs):
+                coder.partial_response_content = f"""
+Do this:
+
+{str(fname)}
+```crystal
+<<<<<<< SEARCH
+one = "one"
+=======
+one = 1
+>>>>>>> REPLACE
+
+```crystal
+<<<<<<< SEARCH
+two = "two"
+=======
+two = 2
+>>>>>>> REPLACE
+
+```crystal
+<<<<<<< SEARCH
+three = "three"
+=======
+three = 3
+>>>>>>> REPLACE
+"""
+                coder.partial_response_function_call = dict()
+                return []
+
+
+            coder.send = mock_send
+
+            coder.run(with_message="ok")
+
+            content = fname.read_text()
+            self.assertEqual(content, """
+one = 1
+two = 2
+three = 3
+""")
+
     def test_gpt_edit_to_dirty_file(self):
         """A dirty file should be committed before the GPT edits are committed"""
 
