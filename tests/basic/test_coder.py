@@ -606,6 +606,111 @@ two = 2
 three = 3
 """)
 
+    def test_failure_to_edit_file(self):
+        """
+        Reproduce error https://github.com/Aider-AI/aider/issues/2959
+        """
+
+        with GitTemporaryDirectory():
+            repo = git.Repo()
+
+            fname = Path("test.py")
+
+            fname.write_text("")
+
+            repo.git.add(str(fname))
+            repo.git.commit("-m", "new")
+
+            io = InputOutput(yes=True)
+            coder = Coder.create(self.GPT35, "diff", io=io, fnames=[str(fname)])
+            new_code  = """#!/usr/bin/env python
+from transport.models import Reservations
+from django.utils import timezone
+import datetime
+import sys
+
+def main():
+    # Get current date
+    current_date = timezone.now().date()
+
+    # Set up test date range
+    start_date = current_date
+    end_date = current_date + datetime.timedelta(days=3)
+
+    # Create proper timezone-aware datetimes
+    end_datetime = timezone.make_aware(datetime.datetime.combine(end_date, datetime.time(23, 59, 59)))
+    start_datetime = timezone.make_aware(datetime.datetime.combine(start_date, datetime.time(0, 0, 0)))
+
+    # Try the query
+    reservations = Reservations.objects.filter(
+        planned_departure_datetime__lt=end_datetime,
+        planned_return_datetime__gt=start_datetime,
+        reservation_cancelled=False,
+        cancelled_by_driver=False,
+        coordinator_approval='Approved'
+    ).select_related('vehicle', 'assigned_driver', 'billing_department')
+
+    # Print query details
+    sys.stdout.write(f"\\nQuery parameters:\\n")
+    sys.stdout.write(f"Start datetime: {{start_datetime}}\\n")
+    sys.stdout.write(f"End datetime: {{end_datetime}}\\n")
+
+    # Check results
+    sys.stdout.write(f"\\nFound {{reservations.count()}} reservations\\n")
+
+    # Print each reservation
+    for r in reservations:
+        sys.stdout.write(f"\\nReservation {{r.id}}:\\n")
+        sys.stdout.write(f"Vehicle: {{r.vehicle.vehicle_no}}\\n")
+        sys.stdout.write(f"Departure: {{r.planned_departure_datetime}}\\n")
+        sys.stdout.write(f"Return: {{r.planned_return_datetime}}\\n")
+        sys.stdout.write(f"Driver: {{r.assigned_driver.first_name}} {{r.assigned_driver.last_name}}\\n")
+        sys.stdout.write(f"Department: {{r.billing_department.name}}\\n")
+
+if __name__ == '__main__':
+    main()
+"""
+
+            def mock_send(*args, **kwargs):
+                coder.partial_response_content = f"""
+Do this:
+
+Let me fix that. We'll create a proper Python script that can run without TTY:
+
+{str(fname)}
+```python
+<<<<<<< SEARCH
+=======
+{new_code}
+>>>>>>> REPLACE
+```
+
+To run it:
+```bash
+mkdir -p tmp
+chmod +x tmp/test.py
+docker compose exec web python tmp/test.py
+```
+
+This version:
+1. Uses sys.stdout.write instead of print
+2. Wraps code in a main() function
+3. Includes proper script execution check
+4. Can run without TTY
+5. Has executable permissions
+```
+"""
+                coder.partial_response_function_call = dict()
+                return []
+
+
+            coder.send = mock_send
+
+            coder.run(with_message="ok")
+
+            content = fname.read_text()
+            self.assertEqual(content, new_code)
+
     def test_gpt_edit_to_dirty_file(self):
         """A dirty file should be committed before the GPT edits are committed"""
 
