@@ -625,7 +625,8 @@ three = 3
             repo.git.commit("-m", "new")
 
             io = InputOutput(yes=True)
-            coder = Coder.create(self.GPT35, "diff", io=io, fnames=[str(fname)])
+            sonnet = Model("claude-3-5-sonnet-20241022")
+            coder = Coder.create(sonnet, "diff", io=io, fnames=[str(fname)], auto_commits=False)
             new_code  = """#!/usr/bin/env python
 from transport.models import Reservations
 from django.utils import timezone
