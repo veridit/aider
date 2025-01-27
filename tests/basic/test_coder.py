@@ -576,6 +576,7 @@ one = "one"
 =======
 one = 1
 >>>>>>> REPLACE
+```
 
 ```crystal
 <<<<<<< SEARCH
@@ -583,6 +584,7 @@ two = "two"
 =======
 two = 2
 >>>>>>> REPLACE
+```
 
 ```crystal
 <<<<<<< SEARCH
@@ -590,6 +592,7 @@ three = "three"
 =======
 three = 3
 >>>>>>> REPLACE
+```
 """
                 coder.partial_response_function_call = dict()
                 return []
